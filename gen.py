@@ -1,30 +1,78 @@
 import xml.etree.ElementTree as ET
 from xml.dom import minidom
 from datetime import datetime
-# from faker import Faker
+from faker import Faker
 
-# Инициализация Faker для русскоязычных данных
-# fake = Faker("ru_RU")
+# --- Инициализация ---
+fake = Faker("ru_RU")
 
+# --- Валидаторы ИНН и СНИЛС ---
+def validate_inn(inn: str) -> bool:
+    if len(inn) != 12 or not inn.isdigit():
+        return False
 
-person_data = {
-    "lastName": "ПЕРЕВОЩИКОВ",
-    "firstName": "ЮРИЙ",
-    "middleName": "ЛЬВОВИЧ",
-    "birthDate": "1989-01-01",
-    "birthPlace": "ГЛАЗОВ",
-    "citizenship": "234",
-    "docCode": "21",
-    "docSeries": "2121",
-    "docNum": "123356",
-    "issueDate": "2008-01-01",
-    "docIssuer": "МВД РОССИИ",
-    "deptCode": "111-212",
-    "foreignerCode": "3",
-    "taxNum": "309963085325",
-    "snils": "12277154143"
-}
+    def calc(digits, coeffs):
+        return str(sum(int(d) * c for d, c in zip(digits, coeffs)) % 11 % 10)
 
+    n1 = calc(inn[:10], [7, 2, 4, 10, 3, 5, 9, 4, 6, 8])
+    n2 = calc(inn[:11], [3, 7, 2, 4, 10, 3, 5, 9, 4, 6, 8])
+    return inn[10] == n1 and inn[11] == n2
+
+def validate_snils(snils: str) -> bool:
+    if len(snils) != 11 or not snils.isdigit():
+        return False
+
+    num = snils[:9]
+    control = int(snils[9:])
+    s = sum(int(num[i]) * (9 - i) for i in range(9))
+    if s < 100:
+        check = s
+    elif s in (100, 101):
+        check = 0
+    else:
+        check = s % 101
+        if check in (100, 101):
+            check = 0
+
+    return check == control
+
+# --- Генерация валидных значений ---
+def generate_valid_inn():
+    while True:
+        inn = str(fake.random_int(100000000000, 999999999999))
+        if validate_inn(inn):
+            return inn
+
+def generate_valid_snils():
+    while True:
+        snils = str(fake.random_int(10000000000, 99999999999)).zfill(11)
+        if validate_snils(snils):
+            return snils
+
+# --- Генерация случайного субъекта ---
+def generate_random_person():
+    name_parts = fake.name().split()
+    while len(name_parts) < 3:
+        name_parts.append("")
+    return {
+        "lastName": name_parts[0].upper(),
+        "firstName": name_parts[1].upper(),
+        "middleName": name_parts[2].upper(),
+        "birthDate": fake.date_of_birth(minimum_age=18, maximum_age=65).strftime('%Y-%m-%d'),
+        "birthPlace": fake.city().upper(),
+        "citizenship": "643",
+        "docCode": "21",
+        "docSeries": str(fake.random_int(1000, 9999)),
+        "docNum": str(fake.random_int(100000, 999999)),
+        "issueDate": fake.date_between(start_date='-15y', end_date='-1y').strftime('%Y-%m-%d'),
+        "docIssuer": fake.company().upper(),
+        "deptCode": f"{fake.random_int(100,999)}-{fake.random_int(100,999)}",
+        "foreignerCode": "1",
+        "taxNum": generate_valid_inn(),
+        "snils": generate_valid_snils()
+    }
+
+# --- Построение XML ---
 def build_title(person):
     title = ET.Element("Title")
     fl_group = ET.SubElement(title, "FL_1_4_Group")
@@ -84,21 +132,19 @@ def build_source(date_str):
     ET.SubElement(fl_46_org_source, "otherName").text = "ООО Тестовая передача"
     ET.SubElement(fl_46_org_source, "sourceDateStart").text = "2020-01-01"
     ET.SubElement(fl_46_org_source, "regNum").text = "1"
-    
+
     tax_num_group = ET.SubElement(fl_46_org_source, "TaxNum_group_FL_46_UL_36_OrgSource")
     ET.SubElement(tax_num_group, "taxCode").text = "1"
     ET.SubElement(tax_num_group, "taxNum").text = "1"
-    
+
     ET.SubElement(fl_46_org_source, "sourceCreditInfoDate").text = date_str
-    
+
     return source
 
 def build_event(person, date_str):
     event = ET.Element("Event")
-    source = build_source(date_str)
-    data = build_data(person)
-    event.append(source)
-    event.append(data)
+    event.append(build_source(date_str))
+    event.append(build_data(person))
     return event
 
 def build_document(person, reg_number, date_str):
@@ -115,9 +161,7 @@ def build_document(person, reg_number, date_str):
         "regNumberDocInaccept": reg_number
     })
 
-    event = build_event(person, date_str)
-    document.append(event)
-
+    document.append(build_event(person, date_str))
     return document
 
 def prettify(elem):
@@ -125,7 +169,7 @@ def prettify(elem):
     reparsed = minidom.parseString(rough_string)
     xml_string = reparsed.toprettyxml(indent="    ", encoding="utf-8").decode("utf-8")
 
-    # Переводим атрибуты <Document ...> в столбик
+    # Перенос атрибутов <Document ...> в столбик
     lines = xml_string.splitlines()
     new_lines = []
     for line in lines:
@@ -142,18 +186,20 @@ def prettify(elem):
             new_lines.append(line)
     return "\n".join(new_lines)
 
-# === Основной код ===
-now = datetime.now()
-date_for_doc = now.strftime('%Y-%m-%d')
-timestamp = now.strftime('%Y%m%d_%H%M%S')
+# --- Основной запуск ---
+if __name__ == "__main__":
+    now = datetime.now()
+    date_for_doc = now.strftime('%Y-%m-%d')
+    timestamp = now.strftime('%Y%m%d_%H%M%S')
 
-base_id = "YP01MM000001"
-reg_number = f"{base_id}_{timestamp}"
+    base_id = "YP01MM000001"
+    reg_number = f"{base_id}_{timestamp}"
 
-document_xml = build_document(person_data, reg_number, date_for_doc)
+    person_data = generate_random_person()
+    document_xml = build_document(person_data, reg_number, date_for_doc)
 
-file_name = f"{reg_number}.xml"
-with open(file_name, "w", encoding="utf-8") as f:
-    f.write(prettify(document_xml))
+    file_name = f"{reg_number}.xml"
+    with open(file_name, "w", encoding="utf-8") as f:
+        f.write(prettify(document_xml))
 
-print(f"Документ сохранен в файл: {file_name}")
+    print(f"Документ сохранен в файл: {file_name}")
