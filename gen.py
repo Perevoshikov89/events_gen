@@ -3,9 +3,26 @@ from xml.dom import minidom
 from datetime import datetime
 from faker import Faker
 from uuid import uuid4
+import re
+import random
 
 # --- Инициализация ---
 fake = Faker("ru_RU")
+
+
+def validate_uid(uid: str) -> bool:
+    # Проверка UUIDv4 + суффикс из одного символа a-f0-9
+    pattern = re.compile(r'^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}-[a-f0-9]$')
+    return bool(pattern.match(uid))
+
+
+
+def generate_uid_with_suffix():
+    uid = str(uuid4()).lower()
+    suffix = random.choice('abcdef0123456789')
+    return f"{uid}-{suffix}"
+
+
 
 # --- Валидаторы ИНН и СНИЛС ---
 def validate_inn(inn: str) -> bool:
@@ -109,7 +126,14 @@ def build_event_fl_1_1(date_str):
     ET.SubElement(application, "role").text = "1"
     ET.SubElement(application, "sum").text = f"{fake.random_int(100000, 1000000):.2f}"
     ET.SubElement(application, "currency").text = "RUB"
-    ET.SubElement(application, "uid").text = str(uuid4()) + "-e"
+
+    # Генерация UID с проверкой
+    uid = generate_uid_with_suffix()
+    if not validate_uid(uid):
+        raise ValueError(f"Generated UID is invalid: {uid}")
+    ET.SubElement(application, "uid").text = uid
+
+
 
     application_date = fake.date_between(start_date='-30d', end_date='today').strftime('%Y-%m-%d')
     ET.SubElement(application, "applicationDate").text = application_date
@@ -124,6 +148,7 @@ def build_event_fl_1_1(date_str):
     ET.SubElement(application, "loanSum").text = application.find("sum").text
 
     return fl_event
+
 
 # --- Построение XML для события ---
 def build_events(date_str):
