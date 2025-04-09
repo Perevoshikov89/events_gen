@@ -2,6 +2,7 @@ import xml.etree.ElementTree as ET
 from xml.dom import minidom
 from datetime import datetime
 from faker import Faker
+from uuid import uuid4
 
 # --- Инициализация ---
 fake = Faker("ru_RU")
@@ -58,7 +59,7 @@ def generate_random_person():
         "lastName": name_parts[0].upper(),
         "firstName": name_parts[1].upper(),
         "middleName": name_parts[2].upper(),
-        "birthDate": fake.date_of_birth(minimum_age=18, maximum_age=65).strftime('%Y-%m-%d'),
+        "birthDate": fake.date_of_birth(minimum_age=18, maximum_age=99).strftime('%Y-%m-%d'),
         "birthPlace": fake.city().upper(),
         "citizenship": "643",
         "docCode": "21",
@@ -72,7 +73,41 @@ def generate_random_person():
         "snils": generate_valid_snils()
     }
 
-# --- Построение XML ---
+# --- Генерация события FL_Event_1_1 ---
+def build_event_fl_1_1(date_str):
+    fl_event = ET.Element("FL_Event_1_1", {
+        "operationCode": "A",
+        "orderNum": "1",
+        "eventDate": date_str
+    })
+
+    application = ET.SubElement(fl_event, "FL_55_Application")
+    ET.SubElement(application, "role").text = "1"
+    ET.SubElement(application, "sum").text = f"{fake.random_int(100000, 1000000):.2f}"
+    ET.SubElement(application, "currency").text = "RUB"
+    ET.SubElement(application, "uid").text = str(uuid4()) + "-e"
+
+    application_date = fake.date_between(start_date='-30d', end_date='today').strftime('%Y-%m-%d')
+    ET.SubElement(application, "applicationDate").text = application_date
+    ET.SubElement(application, "sourceCode").text = "1"
+    ET.SubElement(application, "wayCode").text = "6"
+    ET.SubElement(application, "stageEndDate").text = application_date
+    ET.SubElement(application, "purposeCode").text = "2"
+    ET.SubElement(application, "stageCode").text = "1"
+    ET.SubElement(application, "stageDate").text = application_date
+    ET.SubElement(application, "applicationCode").text = "6"
+    ET.SubElement(application, "num").text = application_date.replace("-", "") + f"-{fake.random_int(10000,99999)}"
+    ET.SubElement(application, "loanSum").text = application.find("sum").text
+
+    return fl_event
+
+# --- Построение XML для события ---
+def build_events(date_str):
+    events = ET.Element("Events")
+    events.append(build_event_fl_1_1(date_str))
+    return events
+
+# --- Построение других частей документа ---
 def build_title(person):
     title = ET.Element("Title")
     fl_group = ET.SubElement(title, "FL_1_4_Group")
@@ -91,6 +126,29 @@ def build_title(person):
     ET.SubElement(fl_doc, "docIssuer").text = person["docIssuer"]
     ET.SubElement(fl_doc, "deptCode").text = person["deptCode"]
     ET.SubElement(fl_doc, "foreignerCode").text = person["foreignerCode"]
+
+    # Вставка блока FL_2_5_Group между FL_1_4_Group и FL_3_Birth
+    fl_2_5_group = ET.SubElement(title, "FL_2_5_Group")
+
+    # Добавление FL_2_PrevName
+    fl_2_prev_name = ET.SubElement(fl_2_5_group, "FL_2_PrevName")
+    ET.SubElement(fl_2_prev_name, "prevNameFlag_1")
+    ET.SubElement(fl_2_prev_name, "lastName").text = "ГАЙ"
+    ET.SubElement(fl_2_prev_name, "firstName").text = "ЮЛИЙ"
+    ET.SubElement(fl_2_prev_name, "middleName").text = "ЦЕЗАРЬ"
+    ET.SubElement(fl_2_prev_name, "date").text = "2009-01-01"
+
+    # Добавление FL_5_PrevDoc
+    fl_5_prev_doc = ET.SubElement(fl_2_5_group, "FL_5_PrevDoc")
+    ET.SubElement(fl_5_prev_doc, "prevDocFact_1")
+    ET.SubElement(fl_5_prev_doc, "countryCode").text = "234"
+    ET.SubElement(fl_5_prev_doc, "docCode").text = "21"
+    ET.SubElement(fl_5_prev_doc, "docSeries").text = "2222"
+    ET.SubElement(fl_5_prev_doc, "docNum").text = "234500"
+    ET.SubElement(fl_5_prev_doc, "issueDate").text = "2010-01-01"
+    ET.SubElement(fl_5_prev_doc, "docIssuer").text = "МВД РОССИИ"
+    ET.SubElement(fl_5_prev_doc, "deptCode").text = "180-018"
+    ET.SubElement(fl_5_prev_doc, "endDate").text = "2030-01-31"
 
     fl_birth = ET.SubElement(title, "FL_3_Birth")
     ET.SubElement(fl_birth, "birthDate").text = person["birthDate"]
@@ -116,9 +174,14 @@ def build_subject_fl(person):
     subject.append(title)
     return subject
 
-def build_data(person):
+def build_data(person, date_str):
     data = ET.Element("Data")
     subject_fl = build_subject_fl(person)
+    
+    # Вставляем <Events> с <FL_Event_1_1>
+    events = build_events(date_str)
+    subject_fl.append(events)
+
     data.append(subject_fl)
     return data
 
@@ -141,12 +204,6 @@ def build_source(date_str):
 
     return source
 
-def build_event(person, date_str):
-    event = ET.Element("Event")
-    event.append(build_source(date_str))
-    event.append(build_data(person))
-    return event
-
 def build_document(person, reg_number, date_str):
     document = ET.Element("Document", {
         "xmlns:xs": "http://www.w3.org/2001/XMLSchema",
@@ -161,7 +218,8 @@ def build_document(person, reg_number, date_str):
         "regNumberDocInaccept": reg_number
     })
 
-    document.append(build_event(person, date_str))
+    document.append(build_source(date_str))
+    document.append(build_data(person, date_str))
     return document
 
 def prettify(elem):
