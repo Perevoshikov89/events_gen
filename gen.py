@@ -73,6 +73,30 @@ def generate_random_person():
         "snils": generate_valid_snils()
     }
 
+def generate_prev_name():
+    name_parts = fake.name().split()
+    while len(name_parts) < 3:
+        name_parts.append("")
+    return {
+        "lastName": name_parts[0].upper(),
+        "firstName": name_parts[1].upper(),
+        "middleName": name_parts[2].upper(),
+        "date": fake.date_between(start_date='-20y', end_date='-10y').strftime('%Y-%m-%d')
+    }
+
+def generate_prev_doc():
+    return {
+        "countryCode": str(fake.random_int(100, 899)),
+        "docCode": "21",
+        "docSeries": str(fake.random_int(1000, 9999)),
+        "docNum": str(fake.random_int(100000, 999999)),
+        "issueDate": fake.date_between(start_date='-15y', end_date='-5y').strftime('%Y-%m-%d'),
+        "docIssuer": fake.company().upper(),
+        "deptCode": f"{fake.random_int(100,999)}-{fake.random_int(100,999)}",
+        "endDate": fake.date_between(start_date='today', end_date='+10y').strftime('%Y-%m-%d')
+    } 
+
+  
 # --- Генерация события FL_Event_1_1 ---
 def build_event_fl_1_1(date_str):
     fl_event = ET.Element("FL_Event_1_1", {
@@ -108,6 +132,7 @@ def build_events(date_str):
     return events
 
 # --- Построение других частей документа ---
+
 def build_title(person):
     title = ET.Element("Title")
     fl_group = ET.SubElement(title, "FL_1_4_Group")
@@ -127,28 +152,29 @@ def build_title(person):
     ET.SubElement(fl_doc, "deptCode").text = person["deptCode"]
     ET.SubElement(fl_doc, "foreignerCode").text = person["foreignerCode"]
 
-    # Вставка блока FL_2_5_Group между FL_1_4_Group и FL_3_Birth
     fl_2_5_group = ET.SubElement(title, "FL_2_5_Group")
 
-    # Добавление FL_2_PrevName
+    # --- Случайное предыдущее имя ---
+    prev_name = generate_prev_name()
     fl_2_prev_name = ET.SubElement(fl_2_5_group, "FL_2_PrevName")
     ET.SubElement(fl_2_prev_name, "prevNameFlag_1")
-    ET.SubElement(fl_2_prev_name, "lastName").text = "ГАЙ"
-    ET.SubElement(fl_2_prev_name, "firstName").text = "ЮЛИЙ"
-    ET.SubElement(fl_2_prev_name, "middleName").text = "ЦЕЗАРЬ"
-    ET.SubElement(fl_2_prev_name, "date").text = "2009-01-01"
+    ET.SubElement(fl_2_prev_name, "lastName").text = prev_name["lastName"]
+    ET.SubElement(fl_2_prev_name, "firstName").text = prev_name["firstName"]
+    ET.SubElement(fl_2_prev_name, "middleName").text = prev_name["middleName"]
+    ET.SubElement(fl_2_prev_name, "date").text = prev_name["date"]
 
-    # Добавление FL_5_PrevDoc
+    # --- Случайный предыдущий документ ---
+    prev_doc = generate_prev_doc()
     fl_5_prev_doc = ET.SubElement(fl_2_5_group, "FL_5_PrevDoc")
     ET.SubElement(fl_5_prev_doc, "prevDocFact_1")
-    ET.SubElement(fl_5_prev_doc, "countryCode").text = "234"
-    ET.SubElement(fl_5_prev_doc, "docCode").text = "21"
-    ET.SubElement(fl_5_prev_doc, "docSeries").text = "2222"
-    ET.SubElement(fl_5_prev_doc, "docNum").text = "234500"
-    ET.SubElement(fl_5_prev_doc, "issueDate").text = "2010-01-01"
-    ET.SubElement(fl_5_prev_doc, "docIssuer").text = "МВД РОССИИ"
-    ET.SubElement(fl_5_prev_doc, "deptCode").text = "180-018"
-    ET.SubElement(fl_5_prev_doc, "endDate").text = "2030-01-31"
+    ET.SubElement(fl_5_prev_doc, "countryCode").text = prev_doc["countryCode"]
+    ET.SubElement(fl_5_prev_doc, "docCode").text = prev_doc["docCode"]
+    ET.SubElement(fl_5_prev_doc, "docSeries").text = prev_doc["docSeries"]
+    ET.SubElement(fl_5_prev_doc, "docNum").text = prev_doc["docNum"]
+    ET.SubElement(fl_5_prev_doc, "issueDate").text = prev_doc["issueDate"]
+    ET.SubElement(fl_5_prev_doc, "docIssuer").text = prev_doc["docIssuer"]
+    ET.SubElement(fl_5_prev_doc, "deptCode").text = prev_doc["deptCode"]
+    ET.SubElement(fl_5_prev_doc, "endDate").text = prev_doc["endDate"]
 
     fl_birth = ET.SubElement(title, "FL_3_Birth")
     ET.SubElement(fl_birth, "birthDate").text = person["birthDate"]
@@ -167,6 +193,7 @@ def build_title(person):
     ET.SubElement(fl_social, "socialNum").text = person["snils"]
 
     return title
+
 
 def build_subject_fl(person):
     subject = ET.Element("Subject_FL")
