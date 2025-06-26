@@ -259,7 +259,7 @@ def build_source(date_str):
 def build_document(person, reg_number, date_str):
     document = ET.Element("Document", {
         "xmlns:xs": "http://www.w3.org/2001/XMLSchema",
-        "schemaVersion": "3.0",
+        "schemaVersion": "4.1",
         "ogrn": "1234567890123",
         "sourceID": "YP01MM000001",
         "regNumberDoc": reg_number,
