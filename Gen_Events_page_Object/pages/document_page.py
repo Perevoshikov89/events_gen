@@ -190,7 +190,7 @@ class DocumentBuilder:
     def build(self):
         doc = ET.Element("Document", {
             "xmlns:xs": "http://www.w3.org/2001/XMLSchema",
-            "schemaVersion": "3.0",
+            "schemaVersion": "4.1",
             "ogrn": "1234567890123",
             "sourceID": "YP01MM000001",
             "regNumberDoc": self.reg_number,
